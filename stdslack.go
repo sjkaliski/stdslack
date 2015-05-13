@@ -1,9 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -53,13 +54,26 @@ func main() {
 	}
 	slackC := slack.NewClient(string(data))
 
-	var content string
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		content += scanner.Text() + "\n"
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
-	err = slackC.SendMessage(*channel, content, "stdslack")
+	// Check if stdin is from a terminal (i.e. no input to read).
+	if stat.Mode()&os.ModeCharDevice != 0 {
+		fmt.Fprintln(os.Stderr, "Content needs to be given to stdin to use")
+		os.Exit(1)
+	}
+
+	var content bytes.Buffer
+	_, err = io.Copy(&content, os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	err = slackC.SendMessage(*channel, content.String(), "stdslack")
 	if err != nil {
 		fmt.Println(err)
 	}
